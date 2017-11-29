@@ -104,6 +104,8 @@ public class StatementClient
         requireNonNull(session, "session is null");
         requireNonNull(query, "query is null");
 
+        //在QueryRunner的create方法，读取命令行的参数实例化httpClient
+        //主要包括：代理ip端口、通信方法等信息
         this.httpClient = httpClient;
         this.responseHandler = createFullJsonResponseHandler(queryResultsCodec);
         this.debug = session.isDebug();
@@ -112,7 +114,15 @@ public class StatementClient
         this.requestTimeoutNanos = session.getClientRequestTimeout().roundTo(NANOSECONDS);
         this.user = session.getUser();
 
+        //session是命令行敲入的协调器的地址和服务器--server参数
+        //uri=http://localhost:8080/v1/statement
+        //method = POST
+        //head={X-Presto-Time-Zone=[Asia/Shanghai], User-Agent=[StatementClient/unknown], X-Presto-Source=[presto-cli], X-Presto-Language=[zh-CN], X-Presto-User=[tinygao], X-Presto-Transaction-Id=[NONE]}
+        //body =  query的字节数组即为执行语句
+        //在客户端可以查询之前，服务端必须先启动，@Path("/v1/statement")
+        //                                      public class StatementResource
         Request request = buildQueryRequest(session, query);
+        //HTTP请求服务器
         JsonResponse<QueryResults> response = httpClient.execute(request, responseHandler);
 
         if (response.getStatusCode() != HttpStatus.OK.code() || !response.hasValue()) {

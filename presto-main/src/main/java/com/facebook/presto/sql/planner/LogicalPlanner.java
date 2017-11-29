@@ -114,10 +114,13 @@ public class LogicalPlanner
 
     public Plan plan(Analysis analysis, Stage stage)
     {
+        //生成计划（关系代数树），此处没有优化的
         PlanNode root = planStatement(analysis, analysis.getStatement());
 
+        //如果优化
         if (stage.ordinal() >= Stage.OPTIMIZED.ordinal()) {
             for (PlanOptimizer optimizer : planOptimizers) {
+                //对执行计划进行优化（包括规则优化：谓词下推）
                 root = optimizer.optimize(root, session, symbolAllocator.getTypes(), symbolAllocator, idAllocator);
                 requireNonNull(root, format("%s returned a null plan", optimizer.getClass().getName()));
             }
@@ -133,15 +136,18 @@ public class LogicalPlanner
 
     public PlanNode planStatement(Analysis analysis, Statement statement)
     {
+        // 创建表
         if (statement instanceof CreateTableAsSelect && analysis.isCreateTableAsSelectNoOp()) {
             checkState(analysis.getCreateTableDestination().isPresent(), "Table destination is missing");
             Symbol symbol = symbolAllocator.newSymbol("rows", BIGINT);
             PlanNode source = new ValuesNode(idAllocator.getNextId(), ImmutableList.of(symbol), ImmutableList.of(ImmutableList.of(new LongLiteral("0"))));
             return new OutputNode(idAllocator.getNextId(), source, ImmutableList.of("rows"), ImmutableList.of(symbol));
         }
+        // 输出执行计划
         return createOutputPlan(planStatementWithoutOutput(analysis, statement), analysis);
     }
 
+    // 代数关系
     private RelationPlan planStatementWithoutOutput(Analysis analysis, Statement statement)
     {
         if (statement instanceof CreateTableAsSelect) {
@@ -158,6 +164,7 @@ public class LogicalPlanner
             return createDeletePlan(analysis, (Delete) statement);
         }
         else if (statement instanceof Query) {
+            // 创建关系代数
             return createRelationPlan(analysis, (Query) statement);
         }
         else if (statement instanceof Explain && ((Explain) statement).isAnalyze()) {

@@ -92,22 +92,31 @@ public class Console
     @Override
     public void run()
     {
+        //建立连接，通过--server参数来识别127.0.0.1:8080，
+        // 如果没有端口号默认会给你80。如下是我们经常敲入的
+        // ./presto-cli --server 127.0.0.1:8080 --catalog hive --schema default
         ClientSession session = clientOptions.toClientSession();
         KerberosConfig kerberosConfig = clientOptions.toKerberosConfig();
+        //是否带有执行语句
         boolean hasQuery = !Strings.isNullOrEmpty(clientOptions.execute);
+        //是否来着文件
         boolean isFromFile = !Strings.isNullOrEmpty(clientOptions.file);
 
+        //既不带有执行语句也不来自文件，对输出流支持ANSI sequences.
         if (!hasQuery && !isFromFile) {
             AnsiConsole.systemInstall();
         }
 
+        //初始化日志
         initializeLogging(clientOptions.logLevelsFile);
 
+        //如果带有查询语句
         String query = clientOptions.execute;
         if (hasQuery) {
             query += ";";
         }
 
+        //如果来自文件
         if (isFromFile) {
             if (hasQuery) {
                 throw new RuntimeException("both --execute and --file specified");
@@ -122,6 +131,7 @@ public class Console
         }
 
         AtomicBoolean exiting = new AtomicBoolean();
+        //启动一个钩子线程，如果出现异常，则中断主线程
         interruptThreadOnExit(Thread.currentThread(), exiting);
 
         try (QueryRunner queryRunner = QueryRunner.create(
@@ -138,9 +148,11 @@ public class Console
                 clientOptions.authenticationEnabled,
                 kerberosConfig)) {
             if (hasQuery) {
+                //执行完语句并退出
                 executeCommand(queryRunner, query, clientOptions.outputFormat);
             }
             else {
+                //阻塞等待命令行sql语句输入
                 runConsole(queryRunner, session, exiting);
             }
         }
@@ -307,6 +319,7 @@ public class Console
                 process(queryRunner, split.statement(), outputFormat, false);
             }
         }
+        //在客户端最后面会append分号。所以如果没有分号结尾的最后一条语句人为非法不完整的
         if (!isEmptyStatement(splitter.getPartialStatement())) {
             System.err.println("Non-terminated statement: " + splitter.getPartialStatement());
         }
@@ -406,8 +419,10 @@ public class Console
     {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             exiting.set(true);
+            //打断线程
             thread.interrupt();
             try {
+                //等待线程死亡
                 thread.join(EXIT_DELAY.toMillis());
             }
             catch (InterruptedException ignored) {

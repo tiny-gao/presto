@@ -34,10 +34,13 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 import static java.util.Objects.requireNonNull;
 
 @Immutable
+// 范围
 public class Scope
 {
+    // 父亲范围
     private final Optional<Scope> parent;
     private final boolean queryBoundary;
+    // 描述了所有字段、类型、哪个表、有没有重名、字段位置
     private final RelationType relation;
     private final Map<String, WithQuery> namedQueries;
 
@@ -116,11 +119,13 @@ public class Scope
         return name;
     }
 
+    //尝试解析字段
     public Optional<ResolvedField> tryResolveField(Expression node, QualifiedName name)
     {
         return resolveField(node, name, 0, true);
     }
 
+    //解析字段，比如选择字段时候，如果不存在就会报错
     private Optional<ResolvedField> resolveField(Expression node, QualifiedName name, int fieldIndexOffset, boolean local)
     {
         List<Field> matches = relation.resolveFields(name);

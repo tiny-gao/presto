@@ -164,6 +164,7 @@ public class SqlQueryManager
         this.minQueryExpireAge = config.getMinQueryExpireAge();
         this.maxQueryHistory = config.getMaxQueryHistory();
         this.clientTimeout = config.getClientTimeout();
+        //0到1_000_000_000
         this.maxQueryLength = config.getMaxQueryLength();
 
         queryManagementExecutor = Executors.newScheduledThreadPool(config.getQueryManagerExecutorPoolSize(), threadsNamed("query-management-%s"));
@@ -322,6 +323,7 @@ public class SqlQueryManager
         requireNonNull(query, "query is null");
         checkArgument(!query.isEmpty(), "query must not be empty string");
 
+        //创建一个queryId为YYYYMMdd_HHmmss_index_coordId ，其中index为0~99999之间循环
         QueryId queryId = queryIdGenerator.createNextQueryId();
 
         Session session = null;
@@ -329,26 +331,36 @@ public class SqlQueryManager
         Statement statement;
         try {
             session = sessionSupplier.createSession(queryId, transactionManager, accessControl, sessionPropertyManager);
+            //maxQueryLength最大默认为1_000_000_000
             if (query.length() > maxQueryLength) {
                 int queryLength = query.length();
+                //直接暴力截取
                 query = query.substring(0, maxQueryLength);
                 throw new PrestoException(QUERY_TEXT_TOO_LARGE, format("Query text length (%s) exceeds the maximum length (%s)", queryLength, maxQueryLength));
             }
 
+            //创建语法，具有一些改造token的动作，具体见内部
             Statement wrappedStatement = sqlParser.createStatement(query);
+            //获取那些用prepareStatement弄的语句
             statement = unwrapExecuteStatement(wrappedStatement, sqlParser, session);
+            //如果是有参数的，则是prepareStatement语句，把参数表达式弄过来
             List<Expression> parameters = wrappedStatement instanceof Execute ? ((Execute) wrappedStatement).getParameters() : emptyList();
+            //检车参数的个数是否匹配，检查参数类似是否是常量
             validateParameters(statement, parameters);
+            //DataDefinitionExecutionFactory 和 SqlQueryExecutionFactory 选择一个
+            //DataDefinitionExecutionFactory用于DDL(DataDefinition)语句,而 SqlQueryExecutionFactory用于DML（Data Manipulation）语句
             QueryExecutionFactory<?> queryExecutionFactory = executionFactories.get(statement.getClass());
             if (queryExecutionFactory == null) {
                 throw new PrestoException(NOT_SUPPORTED, "Unsupported statement type: " + statement.getClass().getSimpleName());
             }
+            //如果是Explain类型且是EXPLAIN ANALYZE，这个实际会进行查询。他只支持查询语句
             if (statement instanceof Explain && ((Explain) statement).isAnalyze()) {
                 Statement innerStatement = ((Explain) statement).getStatement();
                 if (!(executionFactories.get(innerStatement.getClass()) instanceof SqlQueryExecutionFactory)) {
                     throw new PrestoException(NOT_SUPPORTED, "EXPLAIN ANALYZE only supported for statements that are queries");
                 }
             }
+            //根据执行工厂类创建具体的执行对象，一个语句就有一个执行器
             queryExecution = queryExecutionFactory.createQueryExecution(queryId, query, session, statement, parameters);
         }
         catch (ParsingException | PrestoException | SemanticException e) {
@@ -386,9 +398,11 @@ public class SqlQueryManager
             return queryInfo;
         }
 
+        //获取执行状态信息放入监听器（记录事件）
         QueryInfo queryInfo = queryExecution.getQueryInfo();
         queryMonitor.queryCreatedEvent(queryInfo);
 
+        //添加最终查询监听器（状态改变），传入QueryInfo实现stateChanged方法
         queryExecution.addFinalQueryInfoListener(finalQueryInfo -> {
                 try {
                     QueryInfo info = queryExecution.getQueryInfo();
@@ -401,11 +415,15 @@ public class SqlQueryManager
                 }
         });
 
+        //添加状态监听器
         addStatsListener(queryExecution);
 
+        //进入Map
         queries.put(queryId, queryExecution);
 
         // start the query in the background
+        //开始执行程序
+        //在绑定的时候， binder.bind(QueryManager.class).to(SqlQueryManager.class).in(Scopes.SINGLETON);
         queueManager.submit(statement, queryExecution, queryExecutor);
 
         return queryInfo;
@@ -413,10 +431,11 @@ public class SqlQueryManager
 
     public static Statement unwrapExecuteStatement(Statement statement, SqlParser sqlParser, Session session)
     {
+        //如果不是Execute类型就返回
         if ((!(statement instanceof Execute))) {
             return statement;
         }
-
+        //如果是Execute类型是带有参数的，与PrepareStatement配合使用
         String sql = session.getPreparedStatementFromExecute((Execute) statement);
         return sqlParser.createStatement(sql);
     }

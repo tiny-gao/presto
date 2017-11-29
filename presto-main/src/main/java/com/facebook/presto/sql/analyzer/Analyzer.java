@@ -62,9 +62,16 @@ public class Analyzer
 
     public Analysis analyze(Statement statement, boolean isDescribe)
     {
+        //重写语法树 有以下四种重写器，每一个都服务一下。
+       /* new DescribeInputRewrite(),
+        new DescribeOutputRewrite(),
+        new ShowQueriesRewrite(),
+        new ExplainRewrite());*/
         Statement rewrittenStatement = StatementRewrite.rewrite(session, metadata, sqlParser, queryExplainer, statement, parameters, accessControl);
         Analysis analysis = new Analysis(rewrittenStatement, parameters, isDescribe);
         StatementAnalyzer analyzer = new StatementAnalyzer(analysis, metadata, sqlParser, accessControl, session);
+        // 遍历整棵语法树 上面的analysis会在遍历树的时候，被添加形如这样的：analysis.setUpdateType("CREATE TABLE");
+        //
         analyzer.analyze(rewrittenStatement, Optional.empty());
         return analysis;
     }

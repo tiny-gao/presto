@@ -19,6 +19,7 @@ import io.airlift.concurrent.AsyncSemaphore;
 import org.weakref.jmx.Managed;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -43,11 +44,24 @@ public class QueryQueue
         checkArgument(permits > 0, "maxQueuedQueries + maxConcurrentQueries must be less than or equal to %s", Integer.MAX_VALUE);
 
         this.queuePermits = new AtomicInteger(permits);
+        //异步信号量，传递一个执行器，来从队列中出队任务执行它。类似于自己实现了一套线程池，内部维持一个队列，用信号量来做同步
+        //只要有人往里面提交任务都可以进行执行，QueuedExecution 和onDequeue任务
+        //QueuedExecution包含以下实例
+        /*private final QueryExecution queryExecution;  为具体的查询执行器比如：SqlQueryExecution，我们可以直接看他的start方法
+        private final List<QueryQueue> nextQueues;
+        private final ListenableFuture<?> listenableFuture;
+        private final Executor executor;*/
+
         this.asyncSemaphore = new AsyncSemaphore<>(maxConcurrentQueries,
+                //ExecutorService类型的执行器
                 queryExecutor,
+                //函数方法，输入是任务，输出是任务的future句柄
+                //提交的是QueueEntry类型
                 queueEntry -> {
+                    //出队获取任务
                     QueuedExecution queuedExecution = queueEntry.dequeue();
                     if (queuedExecution != null) {
+                        //执行任务，队列执行器会使用queryExecutor来执行任务
                         queuedExecution.start();
                         return queuedExecution.getCompletionFuture();
                     }
@@ -82,6 +96,7 @@ public class QueryQueue
         QueueEntry entry = new QueueEntry(queuedExecution, queryQueueSize::decrementAndGet);
         queuedExecution.getCompletionFuture().addListener(entry::dequeue, MoreExecutors.directExecutor());
 
+        //往异步信号量提交任务，异步信号量内部会不断迭代运行
         asyncSemaphore.submit(entry);
     }
 

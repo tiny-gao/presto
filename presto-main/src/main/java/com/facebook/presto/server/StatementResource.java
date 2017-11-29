@@ -142,6 +142,7 @@ public class StatementResource
         this.exchangeClientSupplier = requireNonNull(exchangeClientSupplier, "exchangeClientSupplier is null");
         this.blockEncodingSerde = requireNonNull(blockEncodingSerde, "blockEncodingSerde is null");
 
+        //延时200ms，并每隔200ms做清理动作，比如清理queries查询失败的或者没有状态了
         queryPurger.scheduleWithFixedDelay(new PurgeQueriesRunnable(queries, queryManager), 200, 200, MILLISECONDS);
     }
 
@@ -151,6 +152,7 @@ public class StatementResource
         queryPurger.shutdownNow();
     }
 
+    //创建执行语句
     @POST
     @Produces(MediaType.APPLICATION_JSON)
     public Response createQuery(
@@ -170,6 +172,7 @@ public class StatementResource
         SessionSupplier sessionSupplier = new HttpRequestSessionFactory(servletRequest);
 
         ExchangeClient exchangeClient = exchangeClientSupplier.get(deltaMemoryInBytes -> { });
+        //创建Query同时，就开始执行语句了
         Query query = new Query(
                 sessionSupplier,
                 statement,
@@ -179,6 +182,7 @@ public class StatementResource
                 blockEncodingSerde);
         queries.put(query.getQueryId(), query);
 
+        //返回第一批的执行结果
         return getQueryResults(query, Optional.empty(), uriInfo, new Duration(1, MILLISECONDS));
     }
 
@@ -208,6 +212,7 @@ public class StatementResource
         if (token.isPresent()) {
             queryResults = query.getResults(token.get(), uriInfo, wait);
         }
+        //第一次为空的，则执行下面这个
         else {
             queryResults = query.getNextResults(uriInfo, wait);
         }
@@ -326,6 +331,7 @@ public class StatementResource
 
             this.queryManager = queryManager;
 
+            //开始创建语句，并执行
             QueryInfo queryInfo = queryManager.createQuery(sessionSupplier, query);
             queryId = queryInfo.getQueryId();
             session = queryInfo.getSession().toSession(sessionPropertyManager);

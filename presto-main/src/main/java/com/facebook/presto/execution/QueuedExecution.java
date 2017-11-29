@@ -50,6 +50,7 @@ public class QueuedExecution
         return listenableFuture;
     }
 
+    //队列中执行任务
     public void start()
     {
         // Only execute if the query is not already completed (e.g. cancelled)

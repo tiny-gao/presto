@@ -56,14 +56,16 @@ public class SqlQueryQueueManager
     {
         List<QueryQueue> queues;
         try {
+            //判断是否有用户权限规则，等创建或使用之前的队列，返回匹配的队列
             queues = selectQueues(queryExecution.getSession(), executor);
         }
         catch (PrestoException e) {
             queryExecution.fail(e);
             return;
         }
-
+        //遍历队列
         for (QueryQueue queue : queues) {
+            //如果队列满了，则不进行执行
             if (!queue.reserve(queryExecution)) {
                 // Reject query if we couldn't acquire a permit to enter the queue.
                 // The permits will be released when this query fails.
@@ -71,7 +73,7 @@ public class SqlQueryQueueManager
                 return;
             }
         }
-
+        //获取第一个可用的队列，并入队
         queues.get(0).enqueue(createQueuedExecution(queryExecution, queues.subList(1, queues.size()), executor));
     }
 

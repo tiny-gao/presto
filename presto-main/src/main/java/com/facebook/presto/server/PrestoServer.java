@@ -82,7 +82,9 @@ public class PrestoServer
     @Override
     public void run()
     {
+        //检查JVM依赖的系统环境是否符合要求
         verifyJvmRequirements();
+        //验证当前的时间是正常的
         verifySystemTimeIsReasonable();
 
         Logger log = Logger.get(PrestoServer.class);
@@ -105,6 +107,7 @@ public class PrestoServer
                 new ServerSecurityModule(),
                 new AccessControlModule(),
                 new EventListenerModule(),
+                //服务器主要启动入口，包括协调节点的启动
                 new ServerMainModule(sqlParserOptions),
                 new GracefulShutdownModule());
 

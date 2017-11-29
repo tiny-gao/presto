@@ -106,6 +106,7 @@ final class DescribeInputRewrite
             List<Parameter> parameters = getParameters(statement);
 
             // return the positions and types of all parameters
+            // 返回所有参数的位置和字面类型（string）
             Row[] rows = parameters.stream().map(parameter -> createDescribeInputRow(parameter, analysis)).toArray(Row[]::new);
             Optional<String> limit = Optional.empty();
             if (rows.length == 0) {

@@ -16,20 +16,12 @@ package com.facebook.presto.sql.parser;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.Node;
 import com.facebook.presto.sql.tree.Statement;
-import org.antlr.v4.runtime.ANTLRInputStream;
-import org.antlr.v4.runtime.BaseErrorListener;
-import org.antlr.v4.runtime.CommonToken;
-import org.antlr.v4.runtime.CommonTokenStream;
-import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.RecognitionException;
-import org.antlr.v4.runtime.Recognizer;
-import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.*;
 import org.antlr.v4.runtime.atn.PredictionMode;
 import org.antlr.v4.runtime.misc.Pair;
 import org.antlr.v4.runtime.misc.ParseCancellationException;
 
 import javax.inject.Inject;
-
 import java.util.EnumSet;
 import java.util.function.Function;
 
@@ -60,6 +52,7 @@ public class SqlParser
         allowedIdentifierSymbols = EnumSet.copyOf(options.getAllowedIdentifierSymbols());
     }
 
+    //利用ANTLR4生成语法树，添加监听器，遍历整个语法树，Statement可以理解为树根
     public Statement createStatement(String sql)
     {
         return (Statement) invokeParser("statement", sql, SqlBaseParser::singleStatement);
@@ -67,16 +60,20 @@ public class SqlParser
 
     public Expression createExpression(String expression)
     {
-        return (Expression) invokeParser("expression", expression, SqlBaseParser::singleExpression);
+        return (Expression) invokeParser("expression", expression, SqlBaseParser::singleStatement);
     }
 
     private Node invokeParser(String name, String sql, Function<SqlBaseParser, ParserRuleContext> parseFunction)
     {
         try {
+            //词法解析
             SqlBaseLexer lexer = new SqlBaseLexer(new CaseInsensitiveStream(new ANTLRInputStream(sql)));
+            //生成词素流
             CommonTokenStream tokenStream = new CommonTokenStream(lexer);
+            //创建解析类
             SqlBaseParser parser = new SqlBaseParser(tokenStream);
 
+            //添加解析监听器
             parser.addParseListener(new PostProcessor());
 
             lexer.removeErrorListeners();
@@ -89,6 +86,7 @@ public class SqlParser
             try {
                 // first, try parsing with potentially faster SLL mode
                 parser.getInterpreter().setPredictionMode(PredictionMode.SLL);
+                //生成语法树
                 tree = parseFunction.apply(parser);
             }
             catch (ParseCancellationException ex) {
@@ -99,7 +97,7 @@ public class SqlParser
                 parser.getInterpreter().setPredictionMode(PredictionMode.LL);
                 tree = parseFunction.apply(parser);
             }
-
+            //开始遍历树，如果碰到监听的节点，则会被触发动作（新增了一些下面的几个动作）
             return new AstBuilder().visit(tree);
         }
         catch (StackOverflowError e) {

@@ -178,7 +178,9 @@ public class ServerMainModule
     {
         ServerConfig serverConfig = buildConfigObject(ServerConfig.class);
 
+        //如果是协调节点
         if (serverConfig.isCoordinator()) {
+            //调用install会调用configuration函数，这个函数会调用setup,类似此处的类
             install(new CoordinatorModule());
             binder.bind(new TypeLiteral<Optional<QueryPerformanceFetcher>>(){}).toProvider(QueryPerformanceFetcherProvider.class).in(Scopes.SINGLETON);
         }

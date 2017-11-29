@@ -128,15 +128,19 @@ class RelationPlanner
     @Override
     protected RelationPlan visitTable(Table node, Void context)
     {
+        // 通过节点来获取具体的Query
         Query namedQuery = analysis.getNamedQuery(node);
+        // 获取范围
         Scope scope = analysis.getScope(node);
 
         if (namedQuery != null) {
+            // 获取子计划的关系代数
             RelationPlan subPlan = process(namedQuery, null);
 
             // Add implicit coercions if view query produces types that don't match the declared output types
             // of the view (e.g., if the underlying tables referenced by the view changed)
             Type[] types = scope.getRelationType().getAllFields().stream().map(Field::getType).toArray(Type[]::new);
+            // 1+2 强制转换为 3.
             RelationPlan withCoercions = addCoercions(subPlan, types);
             return new RelationPlan(withCoercions.getRoot(), scope, withCoercions.getFieldMappings());
         }

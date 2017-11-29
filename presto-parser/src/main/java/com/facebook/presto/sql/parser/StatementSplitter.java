@@ -58,6 +58,7 @@ public class StatementSplitter
             }
         }
         this.completeStatements = list.build();
+        //最后一个不是分隔符结尾的语句
         this.partialStatement = sb.toString().trim();
     }
 

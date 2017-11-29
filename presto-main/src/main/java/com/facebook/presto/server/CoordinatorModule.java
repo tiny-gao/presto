@@ -139,9 +139,12 @@ public class CoordinatorModule
         jsonCodecBinder(binder).bindJsonCodec(QueryInfo.class);
         jsonCodecBinder(binder).bindJsonCodec(TaskInfo.class);
         jsonCodecBinder(binder).bindJsonCodec(QueryResults.class);
+        //绑定StatementResource
+        //jaxrs 为j2ee 6引入的restful接口
         jaxrsBinder(binder).bind(StatementResource.class);
 
         // query execution visualizer
+        //查询执行的界面
         jaxrsBinder(binder).bind(QueryExecutionResource.class);
 
         // query manager

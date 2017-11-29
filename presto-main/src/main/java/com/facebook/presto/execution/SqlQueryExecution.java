@@ -223,22 +223,31 @@ public final class SqlQueryExecution
         return stateMachine.getSession();
     }
 
+    //真正的执行任务开始
     @Override
     public void start()
     {
+        //为当前线程设定名称
         try (SetThreadName ignored = new SetThreadName("Query-%s", stateMachine.getQueryId())) {
             try {
                 // transition to planning
+                // 状态机从排队进入执行计划（如果当前状态不是排队状态，则说明已经开始或者结束，直接返回）
                 if (!stateMachine.transitionToPlanning()) {
                     // query already started or finished
                     return;
                 }
 
                 // analyze query
+                // 解析语句生成查询执行计划， PlanRoot中的成员实例为：
+               /* private final SubPlan root;  //计划的根root，每一个SubPlan都有List<SubPlan>成员实例
+                private final boolean summarizeTaskInfos;
+                private final Set<ConnectorId> connectors;*/
                 PlanRoot plan = analyzeQuery();
 
+                // 开始查询
                 metadata.beginQuery(getSession(), plan.getConnectors());
 
+                // 分发计划
                 // plan distribution of query
                 planDistribution(plan);
 
@@ -289,17 +298,24 @@ public final class SqlQueryExecution
     private PlanRoot doAnalyzeQuery()
     {
         // time analysis phase
+        // 记录开始解析时间
         long analysisStart = System.nanoTime();
 
         // analyze query
+        // 生成解析器（语义解析，语义解析一般需要依赖元数据Metadata，比如SELECT * FROM table_x ,他要知道table_x是表与FROM这种终结词法单元语义不一样）
         Analyzer analyzer = new Analyzer(stateMachine.getSession(), metadata, sqlParser, accessControl, Optional.of(queryExplainer), parameters);
+        // 解析生成具有意义树结构，类似于理清关系代数（知道什么列，什么表，字段信息，位置，字段属于的表），进入看看
         Analysis analysis = analyzer.analyze(statement);
 
+        //四种更新类型：INSERT/DELETE/CREATE TABLE/CREATE VIEW
         stateMachine.setUpdateType(analysis.getUpdateType());
 
         // plan query
+        // 执行计划分配器ID
         PlanNodeIdAllocator idAllocator = new PlanNodeIdAllocator();
+        // 逻辑执行计划器
         LogicalPlanner logicalPlanner = new LogicalPlanner(stateMachine.getSession(), planOptimizers, idAllocator, metadata, sqlParser);
+        // 利用语义树生成逻辑计划
         Plan plan = logicalPlanner.plan(analysis);
 
         // extract inputs
@@ -311,8 +327,10 @@ public final class SqlQueryExecution
         stateMachine.setOutput(output);
 
         // fragment the plan
+        // 将执行计划分段，可以分给不同的机器上面
         SubPlan subplan = PlanFragmenter.createSubPlans(stateMachine.getSession(), metadata, plan);
 
+        // 状态机记录解析时间
         // record analysis time
         stateMachine.recordAnalysisTime(analysisStart);
 

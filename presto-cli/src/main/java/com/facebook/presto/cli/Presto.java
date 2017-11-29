@@ -23,13 +23,16 @@ public final class Presto
     public static void main(String[] args)
             throws Exception
     {
+        //利用airline在做cli命令行的解析
         Console console = singleCommand(Console.class).parse(args);
 
+        //如果命令行中的可选项为：--help或者version则跳过
         if (console.helpOption.showHelpIfRequested() ||
                 console.versionOption.showVersionIfRequested()) {
             return;
         }
 
+        //启动执行cli
         console.run();
     }
 }

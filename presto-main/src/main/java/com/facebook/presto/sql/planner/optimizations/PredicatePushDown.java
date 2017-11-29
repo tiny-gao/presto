@@ -289,15 +289,20 @@ public class PredicatePushDown
             // See if we can rewrite outer joins in terms of a plain inner join
             node = tryNormalizeToOuterToInnerJoin(node, inheritedPredicate);
 
+            // 左边的有效的谓词
             Expression leftEffectivePredicate = EffectivePredicateExtractor.extract(node.getLeft(), symbolAllocator.getTypes());
+            // 右边的有效的谓词
             Expression rightEffectivePredicate = EffectivePredicateExtractor.extract(node.getRight(), symbolAllocator.getTypes());
+            // join谓词 （适合等价的连接谓词）
             Expression joinPredicate = extractJoinPredicate(node);
 
             Expression leftPredicate;
             Expression rightPredicate;
+            // SELECT A LEFT JOIN B ON A.id=B.id WHERE A.id>100  后面这个A.id>100 后加join条件。 post-join
             Expression postJoinPredicate;
             Expression newJoinPredicate;
 
+            // 将语句中所有的谓词都提取出来
             switch (node.getType()) {
                 case INNER:
                     InnerJoinPushDownResult innerJoinPushDownResult = processInnerJoin(inheritedPredicate,
@@ -344,11 +349,14 @@ public class PredicatePushDown
 
             newJoinPredicate = simplifyExpression(newJoinPredicate);
             // TODO: find a better way to directly optimize FALSE LITERAL in join predicate
+            // 如果join on这个等价谓词是false，则可以改造成0=1
             if (newJoinPredicate.equals(BooleanLiteral.FALSE_LITERAL)) {
                 newJoinPredicate = new ComparisonExpression(ComparisonExpressionType.EQUAL, new LongLiteral("0"), new LongLiteral("1"));
             }
 
+            // 重写节点左边（左表）
             PlanNode leftSource = context.rewrite(node.getLeft(), leftPredicate);
+            // 重写节点右表
             PlanNode rightSource = context.rewrite(node.getRight(), rightPredicate);
 
             PlanNode output = node;
@@ -368,6 +376,7 @@ public class PredicatePushDown
                         .collect(Collectors.toMap(key -> key, Symbol::toSymbolReference)));
 
                 // Create new projections for the new join clauses
+                // 创建新的投影
                 ImmutableList.Builder<JoinNode.EquiJoinClause> joinConditionBuilder = ImmutableList.builder();
                 ImmutableList.Builder<Expression> joinFilterBuilder = ImmutableList.builder();
                 for (Expression conjunct : extractConjuncts(newJoinPredicate)) {

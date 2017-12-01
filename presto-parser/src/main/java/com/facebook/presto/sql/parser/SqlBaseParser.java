@@ -245,10 +245,6 @@ public class SqlBaseParser extends Parser {
 		return _localctx;
 	}
 
-	public final Human singleStatement1() throws RecognitionException {
-		return null;
-	}
-
 	public static class SingleExpressionContext extends ParserRuleContext {
 		public ExpressionContext expression() {
 			return getRuleContext(ExpressionContext.class,0);
